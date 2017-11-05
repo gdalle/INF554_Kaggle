@@ -22,46 +22,55 @@ def gini(actual, pred, cmpcol=0, sortcol=1):
 
 
 def gini_normalized(a, p):
-    """Gini coefficient normalized."""
+    """Normalized Gini coefficient."""
     return gini(a, p) / gini(a, a)
+
+
+def binarize_cat(data):
+    """Return a new DataFrame with categorical variables encoded as 0/1."""
+    for c in data.columns:
+        if "cat" in c:
+            dummies = pd.get_dummies(data[c])
+            dummies.columns = [c + "=" + str(dc) for dc in dummies.columns]
+            data = data.drop(c, axis=1).join(dummies)
+    return data
 
 
 train = pd.read_csv("data/train.csv", index_col=0)
 test = pd.read_csv("data/test.csv", index_col=0)
 
-transformations = []
-for c in train.columns:
-    if c == "target":
-        continue
-    elif "cat" in c:
-        transformations.append(
-            ([c], sklearn.preprocessing.LabelBinarizer()))
-    elif not ("cat" in c or "bin" in c):
-        transformations.append(
-            ([c], sklearn.preprocessing.StandardScaler()))
-mapper = DataFrameMapper(transformations)
 
-X0 = mapper.fit_transform(train.drop("target", axis=1))
-X_test0 = mapper.fit_transform(test)
+train = binarize_cat(train)
+test = binarize_cat(test)
+
+# Turn DataFrames into matrices for scikit-learn
+X0 = np.array(train.drop("target", axis=1))
+X_test0 = np.array(test)
 y0 = np.array(train["target"])
 
-dim = 99999
-X = X0[:dim, :]
-X_test = X_test0[:dim, :]
-y = y0[:dim]
+# Reduce number of individuals (for testing purposes)
+n = 99999999999999
+X = X0[:n, :]
+X_test = X_test0[:n, :]
+y = y0[:n]
 
+# Choose and train first machine learning algorithm
 clf = linear_model.LinearRegression()
-# clf = neighbors.KNeighborsRegressor(n_neighbors=5, weights="distance")
+# Fit on the training set
 clf.fit(X, y)
 
+# Predict results on train set
 y_p = clf.predict(X)
 
+# Predict results on test set
 y_test_p = clf.predict(X_test)
 for i in range(len(y_test_p)):
+    # Force in interval [0, 1]
     y_test_p[i] = max(0, min(1, y_test_p[i]))
 
+# Store the prediction in a DataFrame and export to csv
 prediction = pd.DataFrame(
-    index=test.index[:dim],
+    index=test.index[:n],
     data=np.round(y_test_p, 3),
     columns=["target"])
 prediction.to_csv("data/prediction.csv")
