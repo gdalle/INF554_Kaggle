@@ -1,3 +1,4 @@
 SafeDriver/data/
 Churn/data/
 *.csv
+.idea
