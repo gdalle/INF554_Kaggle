@@ -1,4 +1,5 @@
-SafeDriver/data/
-Churn/data/
 *.csv
+*.7z
 .idea
+proj1/data/
+proj2/data/

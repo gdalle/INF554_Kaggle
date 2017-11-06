@@ -117,4 +117,4 @@ prediction = pd.DataFrame(
     index=test.index[:n],
     data=np.round(y_test_p, 3),
     columns=["target"])
-prediction.to_csv("data/prediction.csv")
+prediction.to_csv("data/submission.csv")
