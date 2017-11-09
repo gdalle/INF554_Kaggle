@@ -115,6 +115,15 @@ def read_members():
 
 members = read_members()
 
+# Merging train / test with members as a way of getting first features
+
+train = pd.merge(train, members, how='left', on='msno')
+train.index = train["msno"]
+train = train.drop("msno", axis=1)
+test = pd.merge(test, members, how='left', on='msno')
+test.index = test["msno"]
+test = test.drop("msno", axis=1)
+
 
 # Transactions table
 
@@ -182,8 +191,8 @@ transactions = read_transactions()
 def read_user_logs(train, test, max_lines=4*(10**7)):
     """Read user logs."""
     # Useful ids
-    id_train = set(train["msno"].unique())
-    id_test = set(test["msno"].unique())
+    id_train = set(train.index.unique())
+    id_test = set(test.index.unique())
     useful_msno = set.union(id_train, id_test)
 
     dtype_cols_user_logs = {
@@ -219,22 +228,21 @@ def read_user_logs(train, test, max_lines=4*(10**7)):
     user_logs = pd.concat(user_logs_list, ignore_index=True)
 
     user_logs['msno'] = user_logs['msno'].astype('category')
-
+    for col in ['num_25', 'num_50', 'num_75', 'num_985', 'num_100', 'num_unq']:
+        user_logs[col] = user_logs[col].astype(np.int8)
+    t3 = user_logs["date"]
+    user_logs['year'] = t3.dt.year.astype(np.int16)
+    user_logs['month'] = t3.dt.month.astype(np.int8)
+    user_logs['day'] = t3.dt.day.astype(np.int8)
+    user_logs = user_logs.drop("date", axis=1)
     memory(user_logs)
     return user_logs
 
 
-user_logs = read_user_logs(train, test, max_lines=100000)
+user_logs = read_user_logs(train, test)
 
+user_logs.max()
 
-# Merging train / test with members as a way of getting first features
-
-train = pd.merge(train, members, how='left', on='msno')
-train.index = train["msno"]
-train = train.drop("msno", axis=1)
-test = pd.merge(test, members, how='left', on='msno')
-test.index = test["msno"]
-test = test.drop("msno", axis=1)
 
 test["is_churn"] = np.random.rand(len(test))
 submission = test.loc[:, ["is_churn"]]
