@@ -1,10 +1,11 @@
 # INF554_Kaggle
 
-Machine learning project - E‰cole polytechnique
+Machine learning project - Ã‰cole polytechnique
 
 ## Projects
 
 proj1 : https://www.kaggle.com/c/porto-seguro-safe-driver-prediction
+
 proj2 : https://www.kaggle.com/c/kkbox-churn-prediction-challenge
 
 ## Data
