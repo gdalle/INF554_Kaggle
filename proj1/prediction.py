@@ -93,13 +93,13 @@ X_test0 = np.array(test)
 y0 = np.array(train["target"])
 
 # Reduce number of individuals (for testing purposes)
-n = 99999999999999
+n = 100000
 X = X0[:n, :]
 X_test = X_test0[:n, :]
 y = y0[:n]
 
 # Choose and train machine learning algorithm
-clf = linear_model.LinearRegression()
+clf = linear_model.LogisticRegression()
 # Fit on the training set
 clf.fit(X, y)
 

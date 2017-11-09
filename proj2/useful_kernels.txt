@@ -1,0 +1,7 @@
+https://www.kaggle.com/guiyom/user-logs-csv-reduce-memory-with-new-tips
+https://www.kaggle.com/rastaman/churn-or-no-churn-exploration-data-analysis
+https://www.kaggle.com/randylaosat/churn-to-the-left-churn-to-the-right-kkbox
+https://www.kaggle.com/shuojin/memory-reduction
+https://www.kaggle.com/juanumusic/reducing-memory-and-managing-dataframes-tidy
+https://www.kaggle.com/zhihui/feature-construction-and-distribution
+https://www.kaggle.com/jagangupta/processing-huge-datasets-user-log
