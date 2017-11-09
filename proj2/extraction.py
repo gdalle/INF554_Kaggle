@@ -45,19 +45,21 @@ train = read_train()
 
 def read_test():
     """Read test."""
-    test1 = pd.read_csv("data/sample_submission_zero.csv")
     test2 = pd.read_csv("data/sample_submission_v2.csv")
-    test2 = test2[~test2.msno.isin(test1.msno.unique())]
-    test = pd.merge(test1, test2, how="outer")
+    # test1 = pd.read_csv("data/sample_submission_zero.csv")
+    # test2 = test2[~test2.msno.isin(test1.msno.unique())]
+    # test = pd.merge(test1, test2, how="outer")
     # test.index = test["msno"]
     # test = test.drop("msno", axis=1)
 
+    test = test2
     memory(test)
     test = test.drop("is_churn", axis=1)
     memory(test)
 
-    del test1
-    del test2
+    # del test1
+    # del test2
+
     return test
 
 
@@ -233,3 +235,8 @@ train = train.drop("msno", axis=1)
 test = pd.merge(test, members, how='left', on='msno')
 test.index = test["msno"]
 test = test.drop("msno", axis=1)
+
+test["is_churn"] = np.random.rand(len(test))
+submission = test.loc[:, ["is_churn"]]
+len(submission)
+submission.to_csv("data/submission.csv")
