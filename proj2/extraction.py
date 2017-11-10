@@ -3,6 +3,8 @@
 import pandas as pd
 import numpy as np
 from sklearn import linear_model
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import log_loss, make_scorer
 from datetime import datetime
 
 
@@ -292,9 +294,10 @@ def read_user_logs(train, test, max_lines=np.inf):
 
     user_logs2 = pd.concat(user_logs_list2, ignore_index=True)
 
-    user_logs = pd.merge(
-        user_logs1, user_logs2,
-        how="outer", sort=False, copy=False)
+    # user_logs = pd.merge(
+    #     user_logs1, user_logs2,
+    #     how="outer", sort=False, copy=False)
+    user_logs = pd.concat([user_logs1, user_logs2], ignore_index=True)
 
     user_logs['msno'] = user_logs['msno'].astype('category')
 
@@ -333,8 +336,8 @@ members = members.drop("msno", axis=1)
 
 # Transactions and user logs dataframes
 
-transactions = read_transactions(train, test, max_lines=10**6)
-user_logs = read_user_logs(train, test, max_lines=10**6)
+transactions = read_transactions(train, test, max_lines=2*10**6)
+user_logs = read_user_logs(train, test, max_lines=2*10**6)
 
 # Feature extraction
 
@@ -359,6 +362,8 @@ def add_members_info(user_table, members):
         members.loc[user_table.index, ["registration_init_year"]]
     user_table["city"] = members.loc[user_table.index, ["city"]]
     user_table = categorize(user_table, "city")
+    user_table["gender"] = members.loc[user_table.index, ["gender"]]
+    user_table = categorize(user_table, "gender")
     return user_table
 
 
@@ -366,7 +371,7 @@ def add_members_info(user_table, members):
 train_useful = add_members_info(train_useful, members)
 test_useful = add_members_info(test_useful, members)
 
-# Prediction
+# Here comes the machine learning
 
 print("\nPREDICTION\n")
 
@@ -375,14 +380,30 @@ x = np.array(train_useful.drop("is_churn", axis=1))
 y = np.array(train_useful["is_churn"])
 xt = np.array(test_useful)
 
-# Linear Regression
-clf = linear_model.LinearRegression()
+# Linear Regression fitting
+clf = linear_model.LogisticRegression()
 clf.fit(x, y)
+
+# Cross-validation
+log_loss_scorer = make_scorer(
+    score_func=log_loss,
+    eps=np.power(10., -15),
+    normalize=True,
+    greater_is_better=False
+)
+scores = cross_val_score(
+    estimator=clf,
+    X=x,
+    y=y,
+    cv=5,
+    scoring=log_loss_scorer
+)
+print("Cross-validation score : {}".format(scores.mean()))
+
+# Prediction
 yt = clf.predict(xt)
-a = yt < 0
-b = yt > 1
-c = a | b
-yt[c] = 0
+yt[yt < 0] = 0
+yt[yt > 1] = 1
 
 # Random prediction as baseline
 test["is_churn"] = np.random.rand(len(test)) * 0.1
