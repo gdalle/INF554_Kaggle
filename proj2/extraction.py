@@ -2,10 +2,14 @@
 
 import pandas as pd
 import numpy as np
+import itertools
 from sklearn import linear_model
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import log_loss, make_scorer
 from datetime import datetime
+
+global_path = "/tmp/kaggle/proj2/"
+global_path = ""
 
 
 def memory(df):
@@ -21,7 +25,7 @@ def memory(df):
 def read_train():
     """Read train."""
     print("\nREADING TRAIN\n")
-    train = pd.read_csv("data/train_v2.csv")
+    train = pd.read_csv(global_path + "data/train_v2.csv")
 
     # Change integer storage to gain memory
     train["is_churn"] = train["is_churn"].astype(np.int8)
@@ -40,7 +44,7 @@ def read_train():
 def read_test():
     """Read test."""
     print("\nREADING TEST\n")
-    test = pd.read_csv("data/sample_submission_v2.csv")
+    test = pd.read_csv(global_path + "data/sample_submission_v2.csv")
 
     # Lose the bogus target column
     test = test.drop("is_churn", axis=1)
@@ -69,7 +73,8 @@ def read_members(split_dates=False):
         'registration_init_time': object,
     }
 
-    members = pd.read_csv("data/members_v2.csv", dtype=dtype_cols_members)
+    members = pd.read_csv(
+        global_path + "data/members_v3.csv", dtype=dtype_cols_members)
 
     # Recode genrer as integers
     members["gender"] = members["gender"].replace("male", 1)
@@ -105,13 +110,13 @@ def read_members(split_dates=False):
 
 # Transactions table
 
-def read_transactions(train, test, max_lines=np.inf, split_dates=False):
+def read_transactions(
+    useful_msno=None,
+    max_lines=np.inf, chunksize=10**5,
+    split_dates=False
+):
     """Read transactions."""
     print("\nREADING TRANSACTIONS\n")
-    # Useful ids
-    id_train = set(train.index.unique())
-    id_test = set(test.index.unique())
-    useful_msno = set.union(id_train, id_test)
 
     dtype_cols_transactions = {
         'msno': object,
@@ -125,54 +130,36 @@ def read_transactions(train, test, max_lines=np.inf, split_dates=False):
         'is_cancel': np.int64
     }
 
-    transactions_list1 = []
-    transactions_list2 = []
-
-    # Read data by chunks to alleviate memory load
-    chunk_number = 0
-    for df in pd.read_csv(
-        "data/transactions.csv",
-        chunksize=10**5,
+    iterator1 = pd.read_csv(
+        global_path + "data/transactions.csv",
+        chunksize=chunksize,
         iterator=True,
         header=0,
         dtype=dtype_cols_transactions
-    ):
-        append_condition = df['msno'].isin(useful_msno)
-        df = df[append_condition]
-        transactions_list1.append(df)
-        print("Chunk {} of table 1 read".format(chunk_number))
-        chunk_number += 1
-        if chunk_number >= max_lines / (10**5):
-            break
-
-    transactions1 = pd.concat(transactions_list1, ignore_index=True)
-
-    # Read data by chunks to alleviate memory load
-    chunk_number = 0
-    for df in pd.read_csv(
-        "data/transactions_v2.csv",
-        chunksize=10**5,
+    )
+    iterator2 = pd.read_csv(
+        global_path + "data/transactions_v2.csv",
+        chunksize=chunksize,
         iterator=True,
         header=0,
         dtype=dtype_cols_transactions
-    ):
-        append_condition = df['msno'].isin(useful_msno)
-        df = df[append_condition]
-        transactions_list2.append(df)
-        print("Chunk {} of table 2 read".format(chunk_number))
+    )
+
+    transactions_list = []
+
+    # Read data by chunks to alleviate memory load
+    chunk_number = 0
+    for df in itertools.chain(iterator1, iterator2):
+        if useful_msno is not None:
+            append_condition = df['msno'].isin(useful_msno)
+            df = df[append_condition]
+        transactions_list.append(df)
+        print("Chunk {} of transactions read".format(chunk_number + 1))
         chunk_number += 1
-        if chunk_number >= max_lines / (10**5):
+        if chunk_number >= max_lines / chunksize:
             break
 
-    transactions2 = pd.concat(transactions_list2, ignore_index=True)
-
-    # transactions1 = pd.read_csv(
-    #     "data/transactions.csv", dtype=dtype_cols_transactions)
-    # transactions2 = pd.read_csv(
-    #     "data/transactions_v2.csv", dtype=dtype_cols_transactions)
-
-    transactions = pd.concat(
-        [transactions1, transactions2], ignore_index=True)
+    transactions = pd.concat(transactions_list, ignore_index=True)
 
     # Change integer storage
     transactions.index = transactions.index.astype(np.int32)
@@ -213,20 +200,18 @@ def read_transactions(train, test, max_lines=np.inf, split_dates=False):
 
     memory(transactions)
 
-    del transactions1
-    del transactions2
     return transactions
 
 
 # User logs table
 
-def read_user_logs(train, test, max_lines=np.inf, split_dates=False):
+def read_user_logs(
+    useful_msno=None, just_date=False,
+    max_lines=np.inf, chunksize=10**5,
+    split_dates=False
+):
     """Read user logs."""
     print("\nREADING USER LOGS\n")
-    # Useful ids
-    id_train = set(train.index.unique())
-    id_test = set(test.index.unique())
-    useful_msno = set.union(id_train, id_test)
 
     dtype_cols_user_logs = {
         'msno': object,
@@ -240,56 +225,65 @@ def read_user_logs(train, test, max_lines=np.inf, split_dates=False):
         'total_secs': np.float32
     }
 
-    user_logs_list1 = []
-    user_logs_list2 = []
+    if not just_date:
+        # Read all columns
+        iterator1 = pd.read_csv(
+            global_path + "data/user_logs.csv",
+            chunksize=chunksize,
+            iterator=True,
+            header=0,
+            dtype=dtype_cols_user_logs
+        )
+        iterator2 = pd.read_csv(
+            global_path + "data/user_logs_v2.csv",
+            chunksize=chunksize,
+            iterator=True,
+            header=0,
+            dtype=dtype_cols_user_logs
+        )
+
+    if just_date:
+        # Read just date and user id
+        iterator1 = pd.read_csv(
+            global_path + "data/user_logs.csv",
+            chunksize=chunksize,
+            iterator=True,
+            header=0,
+            dtype=dtype_cols_user_logs,
+            usecols=["date", "msno"]
+        )
+        iterator2 = pd.read_csv(
+            global_path + "data/user_logs_v2.csv",
+            chunksize=chunksize,
+            iterator=True,
+            header=0,
+            dtype=dtype_cols_user_logs,
+            usecols=["date", "msno"]
+        )
+
+    user_logs_list = []
 
     # Read data by chunks to alleviate memory load
     chunk_number = 0
-    for df in pd.read_csv(
-        "data/user_logs.csv",
-        chunksize=10**5,
-        iterator=True,
-        header=0,
-        dtype=dtype_cols_user_logs
-    ):
-        append_condition = df['msno'].isin(useful_msno)
-        df = df[append_condition]
+    for df in itertools.chain(iterator1, iterator2):
+        if useful_msno is not None:
+            append_condition = df['msno'].isin(useful_msno)
+            df = df[append_condition]
         df["date"] = pd.to_datetime(df["date"].astype(str))
-        user_logs_list1.append(df)
-        print("Chunk {} of table 1 read".format(chunk_number))
+        user_logs_list.append(df)
+        print("Chunk {} of user logs read".format(chunk_number + 1))
         chunk_number += 1
-        if chunk_number >= max_lines / (10**5):
+        if chunk_number >= max_lines / chunksize:
             break
 
-    user_logs1 = pd.concat(user_logs_list1, ignore_index=True)
-
-    # Read data by chunks to alleviate memory load
-    chunk_number = 0
-    for df in pd.read_csv(
-        "data/user_logs_v2.csv",
-        chunksize=10**5,
-        iterator=True,
-        header=0,
-        dtype=dtype_cols_user_logs
-    ):
-        append_condition = df['msno'].isin(useful_msno)
-        df = df[append_condition]
-        df["date"] = pd.to_datetime(df["date"].astype(str))
-        user_logs_list2.append(df)
-        print("Chunk {} of table 2 read".format(chunk_number))
-        chunk_number += 1
-        if chunk_number >= max_lines / (10**5):
-            break
-
-    user_logs2 = pd.concat(user_logs_list2, ignore_index=True)
-
-    user_logs = pd.concat([user_logs1, user_logs2], ignore_index=True)
+    user_logs = pd.concat(user_logs_list, ignore_index=True)
 
     user_logs['msno'] = user_logs['msno'].astype('category')
 
     # Change integer storage
     for col in ['num_25', 'num_50', 'num_75', 'num_985', 'num_100', 'num_unq']:
-        user_logs[col] = user_logs[col].astype(np.int8)
+        if col in user_logs.columns:
+            user_logs[col] = user_logs[col].astype(np.int8)
 
     if split_dates:
         # Split date on three columns
@@ -301,8 +295,6 @@ def read_user_logs(train, test, max_lines=np.inf, split_dates=False):
 
     memory(user_logs)
 
-    del user_logs1
-    del user_logs2
     return user_logs
 
 
@@ -312,5 +304,9 @@ if __name__ == "__main__":
     train = read_train()
     test = read_test()
     members = read_members()
-    transactions = read_transactions(train, test, max_lines=10**6 // 3)
-    user_logs = read_user_logs(train, test, max_lines=10**6 // 3)
+    useful_msno = set.union(
+        set(train.index.unique()),
+        set(test.index.unique())
+    )
+    transactions = read_transactions(useful_msno=useful_msno, max_lines=10**6 // 3)
+    user_logs = read_user_logs(useful_msno=useful_msno, just_date=True, max_lines=10**6 // 3)
