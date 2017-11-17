@@ -13,7 +13,7 @@ feat = importlib.reload(feat)
 
 # MAIN
 
-# Reading tables
+# Read tables
 train = ex.read_train()
 test = ex.read_test()
 members = ex.read_members()

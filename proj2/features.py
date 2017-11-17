@@ -5,7 +5,7 @@ import numpy as np
 import extraction as ex
 
 
-def count_days(date_series, base_date=pd.Timestamp(2000, 1, 1)):
+def count_days(date_series, base_date=pd.Timestamp(2017, 3, 1)):
     """Count the days elapsed since the base date for a series of dates."""
     if type(date_series.iloc[0]) == type(base_date):
         # We are dealing with dates : create delta
@@ -39,39 +39,41 @@ def get_useful_users(
     if transactions is not None:
         print("- Transactions")
         useful_indices = useful_indices & \
-            users_table.index.isin(transactions["msno"])
+            users_table.index.isin(transactions["msno"].unique())
     if user_logs is not None:
         print("- User logs")
         useful_indices = useful_indices & \
-            users_table.index.isin(user_logs["msno"].astype(str))
+            users_table.index.isin(user_logs["msno"].unique().astype(str))
     return users_table[useful_indices]
 
 
-def exploit_members(members):
+def exploit_members(members, categories=False):
     """Extract relevant info from members and put it in a DataFrame."""
     msno = members.index.unique()
 
-    # Exploring members
-    modified_members = members.drop("registration_init_time", axis=1)
+    if categories:
+        modified_members = members.drop("registration_init_time", axis=1)
 
-    # City (categories)
-    modified_members = categorize(modified_members, "city")
-    # Bd (categories)
-    modified_members = categorize(modified_members, "bd")
-    # Gender (categories)
-    modified_members = categorize(modified_members, "gender")
-    # Registered via (categories)
-    modified_members = categorize(modified_members, "registered_via")
+        # City (categories)
+        modified_members = categorize(modified_members, "city")
+        # Bd (categories)
+        modified_members = categorize(modified_members, "bd")
+        # Gender (categories)
+        modified_members = categorize(modified_members, "gender")
+        # Registered via (categories)
+        modified_members = categorize(modified_members, "registered_via")
 
     # Registration init time
     registration_init = pd.DataFrame(
         data=count_days(members["registration_init_time"]),
-        index=modified_members.index,
+        index=members.index,
         columns=["registration_init_time"]
     )
 
     # Reindex and concatenate
-    members_data = [modified_members, registration_init]
+    members_data = [registration_init]
+    if categories:
+        members_data.append(modified_members)
     members_data = [df.reindex(msno) for df in members_data]
 
     return pd.concat(members_data, axis=1)
@@ -82,15 +84,18 @@ def exploit_transactions(transactions):
     msno = transactions["msno"].unique()
 
     # Exploring transactions
+    print("Group transactions")
     grouped_trans = transactions.groupby("msno")
 
     # Latest transactions and planned expiration
+    print("Latest")
     latest_trans = grouped_trans.max()
     latest_trans = latest_trans.loc[:, ["transaction_date", "membership_expire_date"]]
     latest_trans = latest_trans.apply(count_days)
     latest_trans.columns = ["latest_transaction_date", "planned_membership_expire_date"]
 
     # Transaction duration
+    print("Duration")
     trans_dates = transactions.loc[:, ["msno", "membership_expire_date", "transaction_date"]]
     trans_dur = trans_dates["membership_expire_date"]-trans_dates["transaction_date"]
     trans_dur = count_days(trans_dur)
@@ -99,11 +104,13 @@ def exploit_transactions(transactions):
     mean_trans_dur = mean_trans_dates.loc[:, ["mean_transaction_duration"]]
 
     # Auto-renew and cancel
+    print("Renew")
     trans_caracs = grouped_trans.mean()
     trans_caracs = trans_caracs.loc[:, ["is_auto_renew", "is_cancel"]]
     trans_caracs.columns = ["auto_renew_freq", "cancel_freq"]
 
     # Reindex and concatenate
+    print("Wrap up")
     transactions_data = [latest_trans, mean_trans_dur, trans_caracs]
     transactions_data = [df.reindex(msno) for df in transactions_data]
 
@@ -115,39 +122,35 @@ def exploit_user_logs(user_logs):
     msno = user_logs["msno"].unique()
 
     # Exploring user logs
+    print("Group user logs")
     grouped_logs = user_logs.groupby("msno")
 
     if "num_25" in user_logs.columns:
+        print("Mean")
         # Mean logs
         mean_logs = grouped_logs.mean()
         cols = mean_logs.columns
         mean_logs.columns = ["mean_" + col for col in cols]
 
     # Latest listening session
+    print("Latest")
     latest_session = grouped_logs.max().loc[:, ["date"]]
     latest_session = latest_session.apply(count_days)
     latest_session.columns = ["latest_listening_session"]
 
     # Number of listening sessions
+    print("Count")
     logs_count = grouped_logs.count().loc[:, ["date"]]
     logs_count.columns = ["number_listening_sessions"]
 
     # Reindex and concatenate
+    print("Wrap up")
     user_logs_data = [latest_session, logs_count]
     if "num_25" in user_logs.columns:
         user_logs_data += [mean_logs]
     user_logs_data = [df.reindex(msno) for df in user_logs_data]
 
     return pd.concat(user_logs_data, axis=1)
-
-
-def add_data_to_users(users_table, df_list):
-    """Concatenate a list of DF and add the information for each user."""
-    users_table_full = users_table.copy()
-    for df in df_list:
-        df = df.reindex(users_table.index)
-        users_table_full = pd.concat([users_table_full, df], axis=1)
-    return users_table_full
 
 
 def select_features(train_full, test_full, features):

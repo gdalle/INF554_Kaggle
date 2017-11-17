@@ -9,7 +9,7 @@ from sklearn.metrics import log_loss, make_scorer
 from datetime import datetime
 
 global_path = "/tmp/kaggle/proj2/"
-global_path = ""
+# global_path = ""
 
 
 def memory(df):
