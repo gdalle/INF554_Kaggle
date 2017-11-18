@@ -5,24 +5,13 @@ from evaluation import *
 from data_processing import *
 from sklearn import preprocessing, model_selection,pipeline,metrics,externals
 
-print("=================")
-print("Setting the pipeline ...")
-
-base = ensemble.GradientBoostingClassifier(verbose=2)
-pipe = pipeline.Pipeline([("imputer",preprocessing.Imputer(missing_values=-1)),("scaler",preprocessing.StandardScaler()),("clf",base)])
-
-cv = model_selection.StratifiedKFold(n_splits=4)
-scorer = metrics.make_scorer(gini_scorer,needs_proba=True)
-print("Done\n")
-
-
 # Read csv files
 
 print("=================")
 print("Loading data ...")
 
-train = pd.read_csv("/tmp/data/train.csv", index_col=0)
-test = pd.read_csv("/tmp/data/test.csv", index_col=0)
+train = pd.read_csv("data/train.csv", index_col=0)
+test = pd.read_csv("data/test.csv", index_col=0)
 
 train_features = [
     "ps_car_13",             
@@ -65,25 +54,61 @@ test = test[train_features[:-1]]
 
 print("Done\n")
 
-# Feature engineering
-
-print("=================")
-print("Transforming categorical variables ...")
-# Transform categorical variables into dummy binary variables
-train = binarize_cat(train)
-test = binarize_cat(test)
-print("Done\n")
-
-
 print("=================")
 print("Processing data ...")
+
 # Turn DataFrames into arrays for scikit-learn
 # Forget the target column in X
-X0 = np.array(train.drop("target", axis=1))
+train_0 = train.drop("target", axis=1)
+
+name_to_index = {name: train_0.columns.get_loc(name) for name in train_0.columns}
+
+X0 = np.array(train_0)
 y0 = np.array(train["target"])
 
 X_test = np.array(test)
 
+print("Done\n")
+
+print("=================")
+print("Setting the pipeline ...")
+
+# Define the num pipeline
+num_selector = filter_num_transform(name_to_index)
+num_imputer = preprocessing.Imputer(missing_values=-1, strategy="mean")
+num_pipeline = pipeline.Pipeline([
+    ("selector", num_selector),
+    ("imputer", num_imputer),
+    ("scaler", preprocessing.StandardScaler())
+])
+
+# Define the bin pipeline
+bin_selector = filter_bin_transform(name_to_index)
+bin_imputer = preprocessing.Imputer(missing_values=-1, strategy="most_frequent")
+bin_pipeline = pipeline.Pipeline([
+    ("selector", bin_selector),
+    ("imputer", bin_imputer)
+])
+
+# Define the cat pipeline
+cat_selector = filter_cat_transform(name_to_index)
+cat_imputer = preprocessing.Imputer(missing_values=-1, strategy="most_frequent")
+cat_pipeline = pipeline.Pipeline([
+    ("selector", cat_selector),
+    ("imputer", cat_imputer),
+    ("binarizer", preprocessing.OneHotEncoder())
+])
+
+preprocessor = pipeline.FeatureUnion([("num", num_pipeline), ("bin", bin_pipeline), ("cat", cat_pipeline)])
+
+base = ensemble.GradientBoostingClassifier(verbose=2)
+pipe = pipeline.Pipeline([
+    ("preprocessor", preprocessor),
+    ("clf",base)
+])
+
+cv = model_selection.StratifiedKFold(n_splits=4)
+scorer = metrics.make_scorer(gini_scorer,needs_proba=True)
 print("Done\n")
 
 
