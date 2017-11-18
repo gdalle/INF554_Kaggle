@@ -29,3 +29,8 @@ def gini(actual, pred, cmpcol=0, sortcol=1):
 def gini_normalized(a, p):
     """Compute normalized Gini coefficient."""
     return gini(a, p) / gini(a, a)
+
+def gini_scorer(a,p):
+    """Compute normalized Gini coefficent with the probabilities of the two classes """
+
+    return gini_normalized(a,p[:,1])

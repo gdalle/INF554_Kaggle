@@ -3,17 +3,15 @@ import numpy as np
 from sklearn import linear_model,ensemble
 from evaluation import *
 from data_processing import *
-from sklearn import preprocessing, model_selection,pipeline,metrics
+from sklearn import preprocessing, model_selection,pipeline,metrics,externals
 
 print("=================")
 print("Setting the pipeline ...")
 
-base = linear_model.LogisticRegression(C=.001,class_weight="balanced")
-
-pipe = pipeline.Pipeline([("imputer",preprocessing.Imputer(missing_values=-1)),("scaler",preprocessing.StandardScaler()),("regressor",base)])
+base = ensemble.GradientBoostingClassifier(verbose=2)
+pipe = pipeline.Pipeline([("imputer",preprocessing.Imputer(missing_values=-1)),("scaler",preprocessing.StandardScaler()),("clf",base)])
 
 cv = model_selection.StratifiedKFold(n_splits=4)
-
 scorer = metrics.make_scorer(gini_scorer,needs_proba=True)
 print("Done\n")
 
@@ -90,16 +88,19 @@ print("Done\n")
 
 
 print("=================")
-print("Learning ...")
-cross_val = model_selection.cross_val_score(pipe,X0,y0,cv=cv,scoring=scorer,verbose=10,n_jobs=4)
-pipe.fit(X0,y0)
+print("Grid searching over hyperparameters ...")
+param_grid={'clf__max_depth': [3,4,5,6,7,8,9,10]}
+gs = model_selection.GridSearchCV(pipe,param_grid=param_grid,scoring=scorer,cv=cv,n_jobs=4,verbose=5)
+gs.fit(X0,y0)
 
 print("=================")
 print("Predicting for submission ...")
-y_test_p = pipe.predict_proba(X_test)[:,1]
+y_test_p = gs.predict_proba(X_test)[:,1]
 prediction = pd.DataFrame(
     index=test.index,
     data=np.round(y_test_p, 3),
     columns=["target"])
 prediction.to_csv("output/submission.csv")
 print("Done\n")
+
+externals.joblib.dump(gs,"GB_GS_max_depth.pkl")
