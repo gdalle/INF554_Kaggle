@@ -1,6 +1,5 @@
 import pandas as pd
 
-
 def filter_num_transform(name_to_index):
     return filterTransform([name for name in name_to_index.keys() if ("cat" not in name and "bin" not in name)],
                            name_to_index)
