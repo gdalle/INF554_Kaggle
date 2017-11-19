@@ -3,54 +3,15 @@ import numpy as np
 from sklearn import linear_model,ensemble
 from evaluation import *
 from data_processing import *
-from sklearn import preprocessing, model_selection,pipeline,metrics,externals
+from sklearn import preprocessing, model_selection,pipeline,metrics,externals,feature_extraction
 
 # Read csv files
 
 print("=================")
 print("Loading data ...")
 
-train = pd.read_csv("data/train.csv", index_col=0)
-test = pd.read_csv("data/test.csv", index_col=0)
-
-train_features = [
-    "ps_car_13",             
-	"ps_reg_03",         
-	"ps_ind_05_cat", 
-	"ps_ind_03", 
-	"ps_ind_15", 
-	"ps_reg_02", 
-	"ps_car_14", 
-	"ps_car_12", 
-	"ps_car_01_cat",  
-	"ps_car_07_cat", 
-	"ps_ind_17_bin", 
-	"ps_car_03_cat", 
-	"ps_reg_01", 
-	"ps_car_15", 
-	"ps_ind_01",  
-	"ps_ind_16_bin", 
-	"ps_ind_07_bin",  
-	"ps_car_06_cat", 
-	"ps_car_04_cat",  
-	"ps_ind_06_bin", 
-	"ps_car_09_cat",  
-	"ps_car_02_cat",  
-	"ps_ind_02_cat", 
-	"ps_car_11",
-	"ps_car_05_cat",  
-	"ps_ind_08_bin",  
-	"ps_car_08_cat", 
-	"ps_ind_09_bin",  
-	"ps_ind_04_cat",  
-	"ps_ind_18_bin",
-	"ps_ind_12_bin",
-	"ps_ind_14",
-	"target",
-]
-
-train = train[train_features]
-test = test[train_features[:-1]]
+train = pd.read_csv("/tmp/data/train.csv", index_col=0)
+test = pd.read_csv("/tmp/data/test.csv", index_col=0)
 
 print("Done\n")
 
@@ -96,31 +57,38 @@ cat_imputer = preprocessing.Imputer(missing_values=-1, strategy="most_frequent")
 cat_pipeline = pipeline.Pipeline([
     ("selector", cat_selector),
     ("imputer", cat_imputer),
-    ("binarizer", preprocessing.OneHotEncoder())
+#   ("binarizer", preprocessing.OneHotEncoder())
 ])
 
 preprocessor = pipeline.FeatureUnion([("num", num_pipeline), ("bin", bin_pipeline), ("cat", cat_pipeline)])
 
-base = ensemble.GradientBoostingClassifier(verbose=2)
+base = ensemble.GradientBoostingClassifier(verbose=5,subsample=.8,
+                                           max_features = "sqrt",max_depth=8,
+                                           min_samples_leaf = .01,
+                                           n_estimators = 1500, learning_rate = .05)
+
 pipe = pipeline.Pipeline([
     ("preprocessor", preprocessor),
     ("clf",base)
 ])
 
-cv = model_selection.StratifiedKFold(n_splits=4)
-scorer = metrics.make_scorer(gini_scorer,needs_proba=True)
 print("Done\n")
 
+print("=================")
+print("Cross-validation ...")
+cv = model_selection.StratifiedKFold(n_splits=4)
+scorer = metrics.make_scorer(gini_scorer,needs_proba=True)
+cross_val = model_selection.cross_val_score(pipe,X0,y0,cv=cv,scoring=scorer,verbose=5,n_jobs=4)
+print(cross_val)
+print("Done\n")
 
 print("=================")
-print("Grid searching over hyperparameters ...")
-param_grid={'clf__max_depth': [3,4,5,6,7,8,9,10]}
-gs = model_selection.GridSearchCV(pipe,param_grid=param_grid,scoring=scorer,cv=cv,n_jobs=4,verbose=5)
-gs.fit(X0,y0)
+print("Learning on the whole training set ...")
+pipe.fit(X0,y0)
 
 print("=================")
 print("Predicting for submission ...")
-y_test_p = gs.predict_proba(X_test)[:,1]
+y_test_p = pipe.predict_proba(X_test)[:,1]
 prediction = pd.DataFrame(
     index=test.index,
     data=np.round(y_test_p, 3),
@@ -128,4 +96,5 @@ prediction = pd.DataFrame(
 prediction.to_csv("output/submission.csv")
 print("Done\n")
 
-externals.joblib.dump(gs,"GB_GS_max_depth.pkl")
+externals.joblib.dump(pipe,"GradientBoosting_well_tuned.pkl")
+
