@@ -65,10 +65,10 @@ def read_members(split_dates=False):
     print("\nREADING MEMBERS\n")
     dtype_cols_members = {
         'msno': object,
-        'city': np.int64,
-        'bd': np.int64,
+        'city': np.int8,
+        'bd': np.int16,
         'gender': object,
-        'registered_via': np.int64,
+        'registered_via': np.int8,
         'expiration_date': object,
         'registration_init_time': object,
     }
@@ -81,11 +81,6 @@ def read_members(split_dates=False):
     members["gender"] = members["gender"].replace("female", 2)
     members["gender"] = members["gender"].replace(np.NaN, 0)
     members["gender"] = members["gender"].astype(np.int8)
-
-    # Change integer storage
-    members['city'] = members['city'].astype(np.int8)
-    members['bd'] = members['bd'].astype(np.int16)
-    members['registered_via'] = members['registered_via'].astype(np.int8)
 
     if not split_dates:
         members["registration_init_time"] = \
@@ -120,14 +115,14 @@ def read_transactions(
 
     dtype_cols_transactions = {
         'msno': object,
-        'payment_method_id': np.int64,
-        'payment_plan_days': np.int64,
-        'plan_list_price': np.int64,
-        'actual_amount_paid': np.int64,
-        'is_auto_renew': np.int64,
+        'payment_method_id': np.int8,
+        'payment_plan_days': np.int16,
+        'plan_list_price': np.int16,
+        'actual_amount_paid': np.int16,
+        'is_auto_renew': np.int8,
         'transaction_date': object,
         'membership_expire_date': object,
-        'is_cancel': np.int64
+        'is_cancel': np.int8
     }
 
     iterator1 = pd.read_csv(
@@ -163,18 +158,6 @@ def read_transactions(
 
     # Change integer storage
     transactions.index = transactions.index.astype(np.int32)
-    transactions['payment_method_id'] = \
-        transactions['payment_method_id'].astype(np.int8)
-    transactions['payment_plan_days'] = \
-        transactions['payment_plan_days'].astype(np.int16)
-    transactions['plan_list_price'] = \
-        transactions['plan_list_price'].astype(np.int16)
-    transactions['actual_amount_paid'] = \
-        transactions['actual_amount_paid'].astype(np.int16)
-    transactions['is_auto_renew'] = \
-        transactions['is_auto_renew'].astype(np.int8)
-    transactions['is_cancel'] = \
-        transactions['is_cancel'].astype(np.int8)
 
     if not split_dates:
         transactions["transaction_date"] = \
@@ -216,12 +199,12 @@ def read_user_logs(
     dtype_cols_user_logs = {
         'msno': object,
         'date': np.int64,
-        'num_25': np.int32,
-        'num_50': np.int32,
-        'num_75': np.int32,
-        'num_985': np.int32,
-        'num_100': np.int32,
-        'num_unq': np.int32,
+        'num_25': np.int8,
+        'num_50': np.int8,
+        'num_75': np.int8,
+        'num_985': np.int8,
+        'num_100': np.int8,
+        'num_unq': np.int8,
         'total_secs': np.float32
     }
 
@@ -232,14 +215,16 @@ def read_user_logs(
             chunksize=chunksize,
             iterator=True,
             header=0,
-            dtype=dtype_cols_user_logs
+            dtype=dtype_cols_user_logs,
+            usecols=["date", "msno", "num_100", "num_unq", "total_secs"]
         )
         iterator2 = pd.read_csv(
             global_path + "data/user_logs_v2.csv",
             chunksize=chunksize,
             iterator=True,
             header=0,
-            dtype=dtype_cols_user_logs
+            dtype=dtype_cols_user_logs,
+            usecols=["date", "msno", "num_100", "num_unq", "total_secs"]
         )
 
     if just_date:
@@ -283,7 +268,8 @@ def read_user_logs(
     # Change integer storage
     for col in ['num_25', 'num_50', 'num_75', 'num_985', 'num_100', 'num_unq']:
         if col in user_logs.columns:
-            user_logs[col] = user_logs[col].astype(np.int8)
+            pass
+            # user_logs[col] = user_logs[col].astype(np.int8)
 
     if split_dates:
         # Split date on three columns
