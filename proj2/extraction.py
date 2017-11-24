@@ -107,7 +107,7 @@ def read_members(split_dates=False):
 
 def read_transactions(
     useful_msno=None,
-    max_lines=np.inf, chunksize=10**5,
+    max_lines=np.inf, chunk_size=10**5,
     split_dates=False
 ):
     """Read transactions."""
@@ -127,14 +127,14 @@ def read_transactions(
 
     iterator1 = pd.read_csv(
         global_path + "data/transactions.csv",
-        chunksize=chunksize,
+        chunksize=chunk_size,
         iterator=True,
         header=0,
         dtype=dtype_cols_transactions
     )
     iterator2 = pd.read_csv(
         global_path + "data/transactions_v2.csv",
-        chunksize=chunksize,
+        chunksize=chunk_size,
         iterator=True,
         header=0,
         dtype=dtype_cols_transactions
@@ -151,7 +151,7 @@ def read_transactions(
         transactions_list.append(df)
         print("Chunk {} of transactions read".format(chunk_number + 1))
         chunk_number += 1
-        if chunk_number >= max_lines / chunksize:
+        if chunk_number >= max_lines / chunk_size:
             break
 
     transactions = pd.concat(transactions_list, ignore_index=True)
@@ -189,8 +189,8 @@ def read_transactions(
 # User logs table
 
 def read_user_logs(
-    useful_msno=None, just_date=False,
-    max_lines=np.inf, chunksize=10**5,
+    useful_msno=None, starting_date=None, just_date=False,
+    max_lines=np.inf, chunk_size=10**6,
     split_dates=False
 ):
     """Read user logs."""
@@ -208,68 +208,56 @@ def read_user_logs(
         'total_secs': np.float32
     }
 
-    if not just_date:
-        # Read all columns
-        iterator1 = pd.read_csv(
-            global_path + "data/user_logs.csv",
-            chunksize=chunksize,
-            iterator=True,
-            header=0,
-            dtype=dtype_cols_user_logs,
-            usecols=["date", "msno", "num_100", "num_unq", "total_secs"]
-        )
-        iterator2 = pd.read_csv(
-            global_path + "data/user_logs_v2.csv",
-            chunksize=chunksize,
-            iterator=True,
-            header=0,
-            dtype=dtype_cols_user_logs,
-            usecols=["date", "msno", "num_100", "num_unq", "total_secs"]
-        )
-
     if just_date:
-        # Read just date and user id
-        iterator1 = pd.read_csv(
-            global_path + "data/user_logs.csv",
-            chunksize=chunksize,
-            iterator=True,
-            header=0,
-            dtype=dtype_cols_user_logs,
-            usecols=["date", "msno"]
-        )
-        iterator2 = pd.read_csv(
-            global_path + "data/user_logs_v2.csv",
-            chunksize=chunksize,
-            iterator=True,
-            header=0,
-            dtype=dtype_cols_user_logs,
-            usecols=["date", "msno"]
-        )
+        usecols=["date", "msno"]
+    else:
+        usecols=["date", "msno", "num_100", "num_unq", "total_secs"]
+
+    # Read all columns
+    iterator1 = pd.read_csv(
+        global_path + "data/user_logs.csv",
+        chunksize=chunk_size,
+        iterator=True,
+        header=0,
+        dtype=dtype_cols_user_logs,
+        usecols=usecols
+    )
+    iterator2 = pd.read_csv(
+        global_path + "data/user_logs_v2.csv",
+        chunksize=chunk_size,
+        iterator=True,
+        header=0,
+        dtype=dtype_cols_user_logs,
+        usecols=usecols
+    )
 
     user_logs_list = []
 
-    # Read data by chunks to alleviate memory load
+    # Read data by chunks to reduce memory load
     chunk_number = 0
-    for df in itertools.chain(iterator1, iterator2):
-        if useful_msno is not None:
-            append_condition = df['msno'].isin(useful_msno)
-            df = df[append_condition]
-        df["date"] = pd.to_datetime(df["date"].astype(str))
-        user_logs_list.append(df)
+    for logs_chunk in itertools.chain(iterator1, iterator2):
+        logs_chunk["date"] = pd.to_datetime(logs_chunk["date"].astype(str))
+        
+        # Keep only useful users
+        if False and useful_msno is not None:
+            append_condition = logs_chunk['msno'].isin(useful_msno)
+            logs_chunk = logs_chunk[append_condition]
+        # Keep only dates after a certain threshold
+        if starting_date is not None:
+            append_condition_2 = logs_chunk['date'] > starting_date
+            logs_chunk = logs_chunk[append_condition_2]
+
+        user_logs_list.append(logs_chunk)
+
         print("Chunk {} of user logs read".format(chunk_number + 1))
         chunk_number += 1
-        if chunk_number >= max_lines / chunksize:
+        if chunk_number >= max_lines / chunk_size:
             break
 
     user_logs = pd.concat(user_logs_list, ignore_index=True)
 
+    # Reduce memory load by hashing user ids
     user_logs['msno'] = user_logs['msno'].astype('category')
-
-    # Change integer storage
-    for col in ['num_25', 'num_50', 'num_75', 'num_985', 'num_100', 'num_unq']:
-        if col in user_logs.columns:
-            pass
-            # user_logs[col] = user_logs[col].astype(np.int8)
 
     if split_dates:
         # Split date on three columns
@@ -282,7 +270,6 @@ def read_user_logs(
     memory(user_logs)
 
     return user_logs
-
 
 # TEST
 
