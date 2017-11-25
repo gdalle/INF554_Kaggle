@@ -67,12 +67,6 @@ cat_pipeline = pipeline.Pipeline([
 
 preprocessor = pipeline.FeatureUnion([("num", num_pipeline), ("bin", bin_pipeline), ("cat", cat_pipeline)])
 
-base = ensemble.GradientBoostingClassifier(verbose=2)
-pipe = pipeline.Pipeline([
-    ("preprocessor", preprocessor),
-    ("clf",base)
-])
-
 cv = model_selection.StratifiedKFold(n_splits=4)
 scorer = metrics.make_scorer(gini_scorer,needs_proba=True)
 print("Done\n")
